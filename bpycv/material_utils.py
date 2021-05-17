@@ -18,6 +18,9 @@ from .statu_recover import StatuRecover
 from .node_graph import activate_node_tree, Node
 
 
+"""
+实例分割图渲染
+"""
 class set_inst_material(StatuRecover):
     def __init__(self):
         StatuRecover.__init__(self)
@@ -26,6 +29,32 @@ class set_inst_material(StatuRecover):
         objs = [obj for obj in bpy.data.objects if obj.type in ("MESH", "CURVE")]
         for obj_idx, obj in enumerate(objs):
             inst_id = obj.get("inst_id", 0)  # default inst_id is 0
+            color = tuple(encode_inst_id.id_to_rgb(inst_id)) + (1,)
+
+            material_name = "auto.inst_material." + obj.name
+            material = bpy.data.materials.new(material_name)
+            material["is_auto"] = True
+            material.use_nodes = True
+            material.node_tree.nodes.clear()
+            with activate_node_tree(material.node_tree):
+                Node("ShaderNodeOutputMaterial").Surface = Node(
+                    "ShaderNodeEmission", Color=color
+                ).Emission
+
+            self.replace_collection(obj.data.materials, [material])
+
+"""
+语义分割图渲染
+不需要修改太多，inst_id = obj.get("sem_id", 0)修改值的来源即可
+"""
+class set_sem_material(StatuRecover):
+    def __init__(self):
+        StatuRecover.__init__(self)
+
+        self.set_attr(bpy.data.worlds[0], "use_nodes", False)
+        objs = [obj for obj in bpy.data.objects if obj.type in ("MESH", "CURVE")]
+        for obj_idx, obj in enumerate(objs):
+            inst_id = obj.get("sem_id", 0)  # default sem_id is 0
             color = tuple(encode_inst_id.id_to_rgb(inst_id)) + (1,)
 
             material_name = "auto.inst_material." + obj.name

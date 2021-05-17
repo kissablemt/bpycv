@@ -14,7 +14,7 @@ from boxx import *
 from boxx import imread, os, withattr
 
 from .exr_image_parser import ImageWithAnnotation, parser_exr
-from .material_utils import set_inst_material
+from .material_utils import set_inst_material, set_sem_material
 from .pose_utils import get_6d_pose
 from .statu_recover import StatuRecover, undo
 
@@ -95,7 +95,7 @@ _render_image = render_image
 befor_render_data_hooks = OrderedDict()
 
 # @undo()
-def render_data(render_image=True, render_annotation=True):
+def render_data(render_image=True, render_annotation=True, render_6d_pose=False):
     scene = bpy.data.scenes[0]
     render = scene.render
     for hook_name, hook in befor_render_data_hooks.items():
@@ -103,21 +103,44 @@ def render_data(render_image=True, render_annotation=True):
         hook()
     befor_render_data_hooks.clear()
 
-    path = tempfile.NamedTemporaryFile().name
     render_result = {}
     if render_image:
         render_result["image"] = _render_image()
+        
     if render_annotation:
-        exr_path = path + ".exr"
+        """
+        实例分割渲染
+        """
+        inst_path = tempfile.NamedTemporaryFile().name
+        inst_exr_path = inst_path + ".exr"
+        
         with set_inst_material(), set_annotation_render(), withattr(
-            render, "filepath", exr_path
+            render, "filepath", inst_exr_path
         ):
             print("Render annotation using:", render.engine)
             bpy.ops.render.render(write_still=True)
-        render_result["exr"] = parser_exr(exr_path)
-        os.remove(exr_path)
+        render_result["exr"] = parser_exr(inst_exr_path)
+        os.remove(inst_exr_path)
+
+        """
+        语义分割渲染
+        """
+        sem_path = tempfile.NamedTemporaryFile().name
+        sem_path_exr_path = sem_path + ".exr"
+        
+        with set_sem_material(), set_annotation_render(), withattr(
+            render, "filepath", sem_path_exr_path
+        ):
+            print("Render annotation using:", render.engine)
+            bpy.ops.render.render(write_still=True)
+        sem_exr = parser_exr(sem_path_exr_path)
+        os.remove(sem_path_exr_path)
+
+
     result = ImageWithAnnotation(**render_result)
-    if "render_6d_pose" and render_annotation:
+    result["sem"] = sem_exr.get_inst()
+
+    if render_6d_pose and render_annotation:
         objs = [obj for obj in bpy.data.objects if "inst_id" in obj]
         ycb_6d_pose = get_6d_pose(objs, inst=result["inst"])
         result["ycb_6d_pose"] = ycb_6d_pose
