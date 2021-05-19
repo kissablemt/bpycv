@@ -138,7 +138,8 @@ def render_data(render_image=True, render_annotation=True, render_6d_pose=False)
 
 
     result = ImageWithAnnotation(**render_result)
-    result["sem"] = sem_exr.get_inst()
+    if render_annotation:
+        result["sem"] = sem_exr.get_inst()
 
     if render_6d_pose and render_annotation:
         objs = [obj for obj in bpy.data.objects if "inst_id" in obj]
